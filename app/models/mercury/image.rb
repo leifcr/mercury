@@ -1,16 +1,19 @@
-class Mercury::Image < ActiveRecord::Base
+class Mercury::Image 
+# < ActiveRecord::Base
 
-  set_table_name :mercury_images
+#   set_table_name :mercury_images
 
-  has_attached_file :image, :styles => { :medium => "300x300>", :thumb => "100x100>" }
+#   has_attached_file :image, :styles => { :medium => "300x300>", :thumb => "100x100>" }
 
-  delegate :url, :to => :image
+#   delegate :url, :to => :image
 
-  def serializable_hash(options = nil)
-    options ||= {}
-    options[:methods] ||= []
-    options[:methods] << :url
-    super(options)
-  end
+#   def serializable_hash(options = nil)
+#     options ||= {}
+#     options[:methods] ||= []
+#     options[:methods] << :url
+#     super(options)
+#   end
+
+# support mongo_mapper instead at some point... will rather have separate image uploader/browser...
 
 end
