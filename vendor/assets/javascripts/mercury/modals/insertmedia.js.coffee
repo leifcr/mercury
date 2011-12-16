@@ -3,6 +3,15 @@
   @element.find('label input').on 'click', ->
     jQuery(@).closest('label').next('.selectable').focus()
 
+  @element.find('.select_image_from_external_controller').on 'click', ->
+    $.event.trigger("open_mercury_image_selector")
+    #jQuery(@).closest('label').next('.selectable').focus()
+    # send custom event that should open the modal.
+
+  @element.find('#media_image_url').on 'set_mercury_image_url_from_selector', (event) ->
+    jQuery(@).val(event.image_url)
+    $.event.trigger("close_mercury_image_selector")
+
   @element.find('.selectable').on 'focus', (event) =>
     element = jQuery(event.target)
     element.prev('label').find('input[type=radio]').prop("checked", true)
