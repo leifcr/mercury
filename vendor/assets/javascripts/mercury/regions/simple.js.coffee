@@ -3,32 +3,50 @@
 # how to handle context for buttons?  if the cursor is within a bold area (**bo|ld**), or selecting it -- it would be
 # nice if we could activate the bold button for instance.
 
-class @Mercury.Regions.Markupable extends Mercury.Region
+class @Mercury.Regions.Simple extends Mercury.Region
   @supported: document.getElementById
   @supportedText: "IE 7+, Chrome 10+, Firefox 4+, Safari 5+, Opera 8+"
 
-  type = 'markupable'
+  type = 'simple'
 
   constructor: (@element, @window, @options = {}) ->
-    @type = 'markupable'
+    @type = 'simple'
     super
-    @converter = new Showdown.converter()
 
 
   build: ->
-    width = '100%'
-    height = @element.height()
+    if @element.css('display') == 'block'
+      width = '100%'
+      height = @element.height()
+    else
+      width = @element.width()
+      height = @element.height() # 'auto'
 
-    value = @element.html().replace(/^\s+|\s+$/g, '').replace('&gt;', '>')
+    value = @element.text()
     @element.removeClass(Mercury.config.regions.className)
     @textarea = jQuery('<textarea>', @document).val(value)
     @textarea.attr('class', @element.attr('class')).addClass('mercury-textarea')
-    @textarea.css({border: 0, background: 'transparent', display: 'block', 'overflow-y': 'hidden', width: width, height: height, fontFamily: '"Courier New", Courier, monospace'})
+    @textarea.css
+      border: 0
+      background: 'transparent'
+      'overflow-y': 'hidden'
+      width: width
+      height: height
+      fontFamily: 'inherit'
+      fontSize: 'inherit'
+      fontWeight: 'inherit'
+      fontStyle: 'inherit'
+      color: 'inherit'
+      'min-height': 0
+      padding: '0'
+      margin: 0
+      'border-radius': 0
+      display: 'inherit'
+      lineHeight: 'inherit'
+      textAlign: 'inherit'
     @element.addClass(Mercury.config.regions.className)
     @element.empty().append(@textarea)
 
-    @previewElement = jQuery('<div>', @document)
-    @element.append(@previewElement)
     @container = @element
     @container.data('region', @)
     @element = @textarea
@@ -99,13 +117,15 @@ class @Mercury.Regions.Markupable extends Mercury.Region
           start = text.lastIndexOf('\n', selection.start - 1) if text[start] == '\n'
           if text[start + 1] == '-'
             selection.replace('\n- ', false, true)
-            event.preventDefault()
           if /\d/.test(text[start + 1])
             lineText = text.substring(start, end)
             if /(\d+)\./.test(lineText)
               number = parseInt(RegExp.$1)
               selection.replace("\n#{number += 1}. ", false, true)
-              event.preventDefault()
+          # Never allow return. Newlines won't survive the 
+          # change-over to HTML, so just don't encourage their
+          # use.
+          event.preventDefault()
 
         when 9 # tab
           event.preventDefault()
@@ -138,8 +158,25 @@ class @Mercury.Regions.Markupable extends Mercury.Region
       @focus()
       Mercury.trigger('region:focused', {region: @})
 
-    @previewElement.on 'click', (event) =>
-      $(event.target).closest('a').attr('target', '_parent') if @previewing
+    @element.on 'paste', (event) =>
+      return if @previewing || Mercury.region != @
+      if @specialContainer
+        event.preventDefault()
+        return
+      return if @pasting
+      Mercury.changes = true
+      @handlePaste(event.originalEvent)
+
+
+  handlePaste: (event) ->
+    # get the text content from the clipboard and fall back to using the sanitizer if unavailable
+    @execCommand('insertHTML', {value: event.clipboardData.getData('text/plain').replace(/\n/g, ' ')})
+    event.preventDefault()
+    return
+
+
+  path: ->
+    [@container.get(0)]
 
 
   focus: ->
@@ -164,24 +201,24 @@ class @Mercury.Regions.Markupable extends Mercury.Region
   togglePreview: ->
     if @previewing
       @previewing = false
-      @container.addClass(Mercury.config.regions.className).removeClass("#{Mercury.config.regions.className}-preview")
-      @previewElement.hide()
-      @element.show()
+      @element = @container
+      @build()
       @focus() if Mercury.region == @
+      # @container.addClass(Mercury.config.regions.className).removeClass("#{Mercury.config.regions.className}-preview")
+      # @previewElement.hide()
+      # @element.show()
     else
       @previewing = true
       @container.addClass("#{Mercury.config.regions.className}-preview").removeClass(Mercury.config.regions.className)
-      value = @converter.makeHtml(@element.val())
-      @previewElement.html(value)
-      @previewElement.show()
-      @element.hide()
+      value = jQuery('<div></div>').text(@element.val()).html()
+      @container.html(value)
       Mercury.trigger('region:blurred', {region: @})
 
 
   execCommand: (action, options = {}) ->
     super
 
-    handler.call(@, @selection(), options) if handler = Mercury.Regions.Markupable.actions[action]
+    handler.call(@, @selection(), options) if handler = Mercury.Regions.Simple.actions[action]
     @resize()
 
 
@@ -209,7 +246,7 @@ class @Mercury.Regions.Markupable extends Mercury.Region
 
 
   selection: ->
-    return new Mercury.Regions.Markupable.Selection(@element)
+    return new Mercury.Regions.Simple.Selection(@element)
 
 
   resize: ->
@@ -232,64 +269,11 @@ class @Mercury.Regions.Markupable extends Mercury.Region
         options.value = jQuery('<div>').html(element).html()
       selection.replace(options.value, false, true)
 
-    insertImage: (selection, options) ->
-      selection.replace('![add alt text](' + encodeURI(options.value.src) + ')', true)
-
-    insertTable: (selection, options) ->
-      selection.replace(options.value.replace(/<br>|<br\/>/ig, ''), false, true)
-
-    insertLink: (selection, options) ->
-      selection.replace("[#{options.value.content}](#{options.value.attrs.href} 'optional title')", true)
-
-    insertUnorderedList: (selection) -> selection.addList('unordered')
-
-    insertOrderedList: (selection) -> selection.addList('ordered')
-
-    style: (selection, options) -> selection.wrap("<span class=\"#{options.value}\">", '</span>')
-
-    formatblock: (selection, options) ->
-      wrappers = {
-        h1: ['# ', ' #']
-        h2: ['## ', ' ##']
-        h3: ['### ', ' ###']
-        h4: ['#### ', ' ####']
-        h5: ['##### ', ' #####']
-        h6: ['###### ', ' ######']
-        pre: ['    ', '']
-        blockquote: ['> ', '']
-        p: ['\n', '\n']
-      }
-      selection.unWrapLine("#{wrapper[0]}", "#{wrapper[1]}") for wrapperName, wrapper of wrappers
-      if options.value == 'blockquote'
-        Mercury.Regions.Markupable.actions.indent.call(@, selection, options)
-        return
-      selection.wrapLine("#{wrappers[options.value][0]}", "#{wrappers[options.value][1]}")
-
-    bold: (selection) -> selection.wrap('**', '**')
-
-    italic: (selection) -> selection.wrap('_', '_')
-
-    subscript: (selection) -> selection.wrap('<sub>', '</sub>')
-
-    superscript: (selection) -> selection.wrap('<sup>', '</sup>')
-
-    indent: (selection) ->
-      selection.wrapLine('> ', '', false, true)
-
-    outdent: (selection) ->
-      selection.unWrapLine('> ', '', false, true)
-
-    horizontalRule: (selection) -> selection.replace('\n- - -\n')
-
-    insertSnippet: (selection, options) ->
-      snippet = options.value
-      selection.replace(snippet.getText())
-
   }
 
 
 # Helper class for managing selection and getting information from it
-class Mercury.Regions.Markupable.Selection
+class Mercury.Regions.Simple.Selection
 
   constructor: (@element) ->
     @el = @element.get(0)
@@ -330,49 +314,6 @@ class Mercury.Regions.Markupable.Selection
     @deselectNewLines()
     @replace(left + @text + right, @text != '')
     @select(@start + left.length, @start + left.length) if @text == ''
-
-
-  wrapLine: (left, right, selectAfter = true, reselect = false) ->
-    @getDetails()
-    savedSelection = @serialize()
-    text = @element.val()
-    start = text.lastIndexOf('\n', @start)
-    end = text.indexOf('\n', @end)
-    end = text.length if end < start
-    start = text.lastIndexOf('\n', @start - 1) if text[start] == '\n'
-    @select(start + 1, end)
-    @replace(left + @text + right, selectAfter)
-    @select(savedSelection.start + left.length, savedSelection.end + left.length) if reselect
-
-
-  unWrapLine: (left, right, selectAfter = true, reselect = false) ->
-    @getDetails()
-    savedSelection = @serialize()
-    text = @element.val()
-    start = text.lastIndexOf('\n', @start)
-    end = text.indexOf('\n', @end)
-    end = text.length if end < start
-    start = text.lastIndexOf('\n', @start - 1) if text[start] == '\n'
-    @select(start + 1, end)
-    window.something = @text
-    leftRegExp = new RegExp("^#{left.regExpEscape()}")
-    rightRegExp = new RegExp("#{right.regExpEscape()}$")
-    changed = @replace(@text.replace(leftRegExp, '').replace(rightRegExp, ''), selectAfter)
-    @select(savedSelection.start - left.length, savedSelection.end - left.length) if reselect && changed
-
-
-  addList: (type) ->
-    text = @element.val()
-    start = text.lastIndexOf('\n', @start)
-    end = text.indexOf('\n', @end)
-    end = text.length if end < start
-    start = text.lastIndexOf('\n', @start - 1) if text[start] == '\n'
-    @select(start + 1, end)
-    lines = @text.split('\n')
-    if type == 'unordered'
-      @replace("- " + lines.join("\n- "), true)
-    else
-      @replace(("#{index + 1}. #{line}" for line, index in lines).join('\n'), true)
 
 
   deselectNewLines: ->
