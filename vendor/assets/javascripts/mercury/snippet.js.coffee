@@ -12,7 +12,13 @@ class @Mercury.Snippet
 
 
   @create: (name, options) ->
-    identity = "snippet_#{@all.length}"
+    if @all.length > 0
+      identity = "snippet_0"
+      for snippet, i in @all
+        identity = "snippet_#{i+1}" if snippet.identity == identity
+    else
+      identity = "snippet_#{@all.length}"
+    
     instance = new Mercury.Snippet(name, identity, options)
     @all.push(instance)
     return instance
@@ -38,9 +44,12 @@ class @Mercury.Snippet
 
 
   getHTML: (context, callback = null) ->
-    element = jQuery('<div class="mercury-snippet" contenteditable="false">', context)
-    element.attr({'data-snippet': @identity})
-    element.attr({'data-version': @version})
+    element = jQuery('<div>', {
+      class: "mercury-snippet #{@name}-snippet"
+      contenteditable: "false"
+      'data-snippet': @identity
+      'data-version': @version
+    }, context)
     element.html("[#{@identity}]")
     @loadPreview(element, callback)
     return element

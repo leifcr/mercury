@@ -35,7 +35,7 @@ describe "Mercury.Snippet", ->
     it "builds an element (in whatever context is provided", ->
       ret = @snippet.getHTML($(document))
       html = $('<div>').html(ret).html()
-      expect(html).toContain('class="mercury-snippet"')
+      expect(html).toContain('class="mercury-snippet foo-snippet"')
       expect(html).toContain('contenteditable="false"')
       expect(html).toContain('data-snippet="identity"')
       expect(html).toContain('data-version="1"')
@@ -218,7 +218,15 @@ describe "Mercury.Snippet class methods", ->
     it "pushes into the collection array", ->
       Mercury.Snippet.create('foo', {foo: 'bar'})
       expect(Mercury.Snippet.all.length).toEqual(1)
+      
+    describe "when an snuppet exist with an identical identity", ->
+      it "generates a unique identity", ->
+        Mercury.Snippet.load
+          snippet_1: {name: 'foo', options: {foo: 'bar'}}
+          snippet_2: {name: 'bar', options: {baz: 'pizza'}}
 
+        ret = Mercury.Snippet.create('noobie', {noobie: 'one'})
+        expect(ret.identity).toEqual('snippet_0')
 
   describe ".find", ->
 
